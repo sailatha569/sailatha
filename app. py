@@ -1,0 +1,348 @@
+
+import streamlit as st
+import sqlite3
+import pandas as pd
+from datetime import date
+
+# -----------------------------
+# 1. PAGE CONFIGURATION
+# -----------------------------
+
+st.set_page_config(
+    page_title="AI Student Assistant",
+    page_icon="🎓",
+    layout="wide"
+)
+
+# -----------------------------
+# 2. DATABASE CONNECTION
+# -----------------------------
+
+conn = sqlite3.connect("student_data.db")
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject TEXT,
+    topic TEXT,
+    study_date TEXT
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    score INTEGER,
+    total INTEGER,
+    quiz_date TEXT
+)
+""")
+
+conn.commit()
+
+# -----------------------------
+# 3. DASHBOARD
+# -----------------------------
+
+st.title("🎓 AI-Powered Student Assistant")
+
+st.write(
+    "Welcome! Manage your studies, "
+    "ask questions and test your knowledge."
+)
+
+st.divider()
+
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🏠 Dashboard",
+    "🤖 AI Chatbot",
+    "📅 Study Planner",
+    "📝 Quiz & Progress"
+])
+
+# -----------------------------
+# 4. DASHBOARD
+# -----------------------------
+
+with tab1:
+
+    st.header("Student Dashboard")
+
+    col1, col2, col3 = st.columns(3)
+
+    task_count = cursor.execute(
+        "SELECT COUNT(*) FROM tasks"
+    ).fetchone()[0]
+
+    quiz_count = cursor.execute(
+        "SELECT COUNT(*) FROM scores"
+    ).fetchone()[0]
+
+    average = cursor.execute(
+        "SELECT AVG(score * 100.0 / total) FROM scores"
+    ).fetchone()[0]
+
+    col1.metric("Study Tasks", task_count)
+    col2.metric("Quizzes Completed", quiz_count)
+    col3.metric(
+        "Average Score",
+        f"{average:.1f}%" if average is not None else "0%"
+    )
+
+    st.success("Keep learning and improving every day! 🚀")
+
+# -----------------------------
+# 5. STUDENT FAQ CHATBOT
+# -----------------------------
+
+with tab2:
+
+    st.header("🤖 Student FAQ Chatbot")
+
+    st.write("Ask questions about Python, CSE and studies.")
+
+    faqs = {
+        "python": "Python is a high-level programming language.",
+
+        "oops": "OOP stands for Object-Oriented Programming. Its four pillars are Encapsulation, Inheritance, Polymorphism and Abstraction.",
+
+        "dsa": "DSA means Data Structures and Algorithms. Start with arrays, strings, linked lists, stacks and queues.",
+
+        "dbms": "DBMS stands for Database Management System. It helps store, organize and manage data.",
+
+        "ai": "Artificial Intelligence enables machines to perform tasks that normally require human intelligence.",
+
+        "machine learning": "Machine Learning is a branch of AI that allows computers to learn patterns from data.",
+
+        "career": "For a CSE career, learn Python, DSA, DBMS, SQL, projects and interview skills.",
+
+        "github": "GitHub is a platform used to store, manage and share programming projects."
+    }
+
+    question = st.text_input(
+        "Enter your question:",
+        placeholder="Example: What is Python?"
+    )
+
+    if st.button("Ask Assistant"):
+
+        if question.strip():
+
+            words = question.lower()
+
+            matches = [
+                (keyword, answer)
+                for keyword, answer in faqs.items()
+                if keyword in words
+            ]
+
+            if matches:
+                st.success(matches[0][1])
+            else:
+                st.info(
+                    "Sorry, I don't know this answer yet. "
+                    "Try asking about Python, DSA, DBMS, AI or GitHub."
+                )
+
+        else:
+            st.warning("Please enter a question.")
+
+# -----------------------------
+# 6. STUDY PLANNER
+# -----------------------------
+
+with tab3:
+
+    st.header("📅 Create Your Study Plan")
+
+    with st.form("study_form"):
+
+        subject = st.selectbox(
+            "Select Subject",
+            ["Python", "Java", "DBMS", "DSA",
+             "Artificial Intelligence", "Mathematics"]
+        )
+
+        topic = st.text_input("Enter Study Topic")
+
+        study_date = st.date_input(
+            "Select Study Date",
+            value=date.today()
+        )
+
+        submit_task = st.form_submit_button(
+            "Add Study Task"
+        )
+
+        if submit_task:
+
+            if topic.strip():
+
+                cursor.execute("""
+                INSERT INTO tasks
+                (subject, topic, study_date)
+                VALUES (?, ?, ?)
+                """, (
+                    subject,
+                    topic,
+                    str(study_date)
+                ))
+
+                conn.commit()
+
+                st.success("Study task added successfully!")
+
+            else:
+                st.warning("Please enter a topic.")
+
+    st.subheader("Your Study Schedule")
+
+    tasks = pd.read_sql_query(
+        "SELECT subject, topic, study_date FROM tasks",
+        conn
+    )
+
+    if not tasks.empty:
+        st.dataframe(tasks, use_container_width=True)
+    else:
+        st.info("No study tasks added yet.")
+
+# -----------------------------
+# 7. MCQ QUIZ
+# -----------------------------
+
+with tab4:
+
+    st.header("📝 Python Knowledge Quiz")
+
+    questions = [
+        {
+            "question": "1. Which keyword is used to define a function in Python?",
+            "options": ["function", "def", "fun", "define"],
+            "answer": "def"
+        },
+        {
+            "question": "2. Which data type stores True or False?",
+            "options": ["int", "str", "bool", "float"],
+            "answer": "bool"
+        },
+        {
+            "question": "3. Which loop is used to iterate over a sequence?",
+            "options": ["if", "for", "switch", "try"],
+            "answer": "for"
+        },
+        {
+            "question": "4. Which symbol is used for comments in Python?",
+            "options": ["//", "#", "/*", "$"],
+            "answer": "#"
+        },
+        {
+            "question": "5. Which function displays output?",
+            "options": ["input()", "print()", "show()", "display()"],
+            "answer": "print()"
+        }
+    ]
+
+    with st.form("quiz_form"):
+
+        answers = []
+
+        for i, q in enumerate(questions):
+
+            st.write("**" + q["question"] + "**")
+
+            selected = st.radio(
+                "Choose your answer:",
+                q["options"],
+                index=None,
+                key=f"question_{i}"
+            )
+
+            answers.append(selected)
+
+        submitted = st.form_submit_button(
+            "Submit Quiz"
+        )
+
+        if submitted:
+
+            score = 0
+
+            for i, q in enumerate(questions):
+
+                if answers[i] == q["answer"]:
+                    score += 1
+
+            cursor.execute("""
+            INSERT INTO scores (score, total, quiz_date)
+            VALUES (?, ?, ?)
+            """, (
+                score,
+                len(questions),
+                str(date.today())
+            ))
+
+            conn.commit()
+
+            st.session_state["last_score"] = score
+
+    if "last_score" in st.session_state:
+
+        score = st.session_state["last_score"]
+
+        st.success(
+            f"Your score: {score}/{len(questions)}"
+        )
+
+        st.progress(score / len(questions))
+
+        if score >= 4:
+            st.balloons()
+            st.write("Excellent work! 🎉")
+        else:
+            st.write("Good attempt! Keep practicing. 💪")
+
+    # -------------------------
+    # 8. PROGRESS TRACKER
+    # -------------------------
+
+    st.divider()
+
+    st.subheader("📊 Your Learning Progress")
+
+    scores = pd.read_sql_query(
+        "SELECT score, total, quiz_date FROM scores",
+        conn
+    )
+
+    if not scores.empty:
+
+        scores["Percentage"] = (
+            scores["score"] / scores["total"] * 100
+        )
+
+        st.dataframe(
+            scores,
+            use_container_width=True
+        )
+
+        st.line_chart(
+            scores["Percentage"]
+        )
+
+    else:
+        st.info("Complete your first quiz to see progress.")
+
+# -----------------------------
+# 9. FOOTER
+# -----------------------------
+
+st.divider()
+
+st.caption(
+    "AI-Powered Student Assistant | "
+    "Created using Python and Streamlit"
+)
+
+conn.close()
